@@ -20,7 +20,8 @@ jobs:
 
     - name: Build binaries
       run: |
-        GOOS=windows GOARCH=amd64 go build -o -ldflags "-s -w -H=windowsgui" Autologin.exe -v
+        GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -H=windowsgui" -o Autologin.exe -v
+
 
     - name: Create Release
       id: create_release
@@ -42,6 +43,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./Autologin.exe
-        asset_name: Autologin.exe
+        asset_path: ./tianligpt-windows-amd64.exe
+        asset_name: tianligpt-windows-amd64.exe
         asset_content_type: application/octet-stream
