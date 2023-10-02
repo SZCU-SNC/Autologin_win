@@ -7,6 +7,7 @@ import (
 	"bytes"
 	_ "embed"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -126,11 +127,25 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	username = r.FormValue("username")
-	password = r.FormValue("password")
-	intervalStr := r.FormValue("interval")
-	autoLogin = r.FormValue("auto_login") == "1"
-	iface = r.FormValue("iface")
+	var loginData struct {
+		Username  string `json:"username"`
+		Password  string `json:"password"`
+		Interval  string `json:"interval"`
+		Iface     string `json:"iface"`
+		AutoLogin bool   `json:"autoLogin"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&loginData)
+	if err != nil {
+		http.Error(w, "错误响应", http.StatusBadRequest)
+		return
+	}
+
+	username = loginData.Username
+	password = loginData.Password
+	intervalStr := loginData.Interval
+	autoLogin = loginData.AutoLogin
+	iface = loginData.Iface
 
 	fmt.Fprint(w, "登录信息已配置")
 
