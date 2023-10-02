@@ -150,7 +150,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
+func indexHandler(w http.ResponseWriter, _ *http.Request) {
 	ip, mac := getIPAndMAC(iface)
 
 	var status string
@@ -327,13 +327,20 @@ func main() {
 	}
 	err = http.ListenAndServe(":1580", nil)
 	if err != nil {
-		fmt.Println(err)
+		// 打开浏览器
+		cmd := exec.Command("cmd", "/c", "start", "http://localhost:1580")
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		err = cmd.Run()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 	}
 	saveConfig()
 }
 
 // 列出网卡列表，以json格式返回
-func listInterfacesHandler(w http.ResponseWriter, r *http.Request) {
+func listInterfacesHandler(w http.ResponseWriter, _ *http.Request) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		fmt.Println(err)

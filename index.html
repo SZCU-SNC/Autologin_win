@@ -91,7 +91,7 @@
 </head>
 <body>
     <h1>登录状态检查</h1>
-    <form method="post" action="/login">
+    <form method="post" action="/login" onsubmit="return false;">
         <p>当前状态：{{.Status}}</p>
         <p>当前IP地址：{{.IP}}</p>
         <p>当前MAC地址：{{.MAC}}</p>
@@ -116,7 +116,7 @@
             <input type="checkbox" name="auto_login" id="auto_login" value="1">
         </p>
         <p>
-            <button type="submit">配置</button>
+            <button type="submit" onclick="sendRequest();">配置</button>
         </p>
     </form>
     <script>
@@ -177,8 +177,43 @@
             // 将输入框和勾选框的值存储到localStorage中
             localStorage.setItem('config', JSON.stringify({ username, password, interval, iface, autoLogin }));
         }
+
+        function sendRequest() {
+            // 获取输入框和勾选框的值
+            const username = usernameInput.value;
+            const password = passwordInput.value;
+            const interval = intervalInput.value;
+            const iface = ifaceSelect.value;
+            const autoLogin = autoLoginCheckbox.checked;
+
+            // 构造请求体数据
+            const data = {
+                username: username,
+                password: password,
+                interval: interval,
+                iface: iface,
+                autoLogin: autoLogin
+            };
+
+            // 发送异步POST请求
+            fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.text())
+            .then(text => {
+                // 显示请求信息弹窗
+                alert(text);
+            })
+            .catch(error => {
+                console.error('发送请求时发生错误:', error);
+            });
+        }
     </script>
     <footer>Powered By <a href="https://www.tianli0.top/">Tianli</a></footer>
-    <footer>Version 2.0.0 2023/9/4</a></footer>
+    <footer>Version 3.0 2023/10/2</footer>
 </body>
 </html>
