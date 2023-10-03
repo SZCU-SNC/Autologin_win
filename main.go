@@ -19,8 +19,6 @@ import (
 	"syscall"
 	"text/template"
 	"time"
-
-	"golang.org/x/sys/windows/registry"
 )
 
 var (
@@ -29,7 +27,7 @@ var (
 	interval   time.Duration
 	autoLogin  bool
 	iface      string
-	configFile string = "config.dat"
+	configFile string
 	client     http.Client
 )
 
@@ -237,10 +235,13 @@ func saveConfig() {
 }
 
 func loadConfig() {
-	_, err := registry.OpenKey(registry.CURRENT_USER, `SOFTWARE\Microsoft\Windows\CurrentVersion\Run`, registry.ALL_ACCESS)
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
+	configFile = homeDir + "\\Documents\\autologin\\config.dat"
+	fmt.Println("配置文件路径：", configFile)
 
 	_, err = os.Stat(configFile)
 	if os.IsNotExist(err) {
@@ -306,6 +307,22 @@ func listInterfaces() {
 
 func main() {
 	loadConfig()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	configFile = homeDir + "\\Documents\\autologin\\config.dat"
+	fmt.Println("配置文件路径：", configFile)
+	// 如果没有相关文件夹，则创建
+	_, err = os.Stat(homeDir + "\\Documents\\autologin")
+	if os.IsNotExist(err) {
+		err = os.Mkdir(homeDir+"\\Documents\\autologin", os.ModePerm)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+	}
 
 	client = http.Client{
 		Timeout: 3 * time.Second,
@@ -330,7 +347,7 @@ func main() {
 
 	fmt.Println("\033[31m网卡名称请参考以上列表进行配置测试\n已启动自动登录程序，请在浏览器打开http://localhost:1580 进行配置，后续使用及配置也请在此页面进行\nPowered by Tianli 2023 For SZCU\033[0m")
 	// 如果没有config.dat文件不在本地，则自动打开浏览器
-	_, err := os.Stat(configFile)
+	_, err = os.Stat(configFile)
 	if os.IsNotExist(err) {
 		cmd := exec.Command("cmd", "/c", "start", "http://localhost:1580")
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}

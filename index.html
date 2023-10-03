@@ -207,6 +207,7 @@
             .then(text => {
                 // 显示请求信息弹窗
                 alert(text);
+                location.reload(); // 刷新页面
             })
             .catch(error => {
                 console.error('发送请求时发生错误:', error);
