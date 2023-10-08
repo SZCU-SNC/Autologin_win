@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net"
 	"net/http"
@@ -17,7 +18,6 @@ import (
 	"os/exec"
 	"runtime"
 	"syscall"
-	"text/template"
 	"time"
 )
 
@@ -40,6 +40,122 @@ type Config struct {
 	Interval  time.Duration
 	AutoLogin bool
 	Iface     string
+}
+
+func main() {
+	loadConfig()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	configFile = homeDir + "\\Documents\\autologin\\config.dat"
+	fmt.Println("配置文件路径：", configFile)
+	// 如果没有相关文件夹，则创建
+	_, err = os.Stat(homeDir + "\\Documents\\autologin")
+	if os.IsNotExist(err) {
+		err = os.Mkdir(homeDir+"\\Documents\\autologin", os.ModePerm)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+	}
+
+	client = http.Client{
+		Timeout: 3 * time.Second,
+	}
+
+	listInterfaces()
+	runtime.LockOSThread()
+
+	http.HandleFunc("/", indexHandler)
+	http.HandleFunc("/login", loginHandler)
+	// 列出网卡列表，list函数
+	http.HandleFunc("/list", listInterfacesHandler)
+
+	go func() {
+		for {
+			if autoLogin && !checkLogin() {
+				login()
+			}
+			time.Sleep(interval)
+		}
+	}()
+
+	fmt.Println("\033[31m网卡名称请参考以上列表进行配置测试\n已启动自动登录程序，请在浏览器打开http://localhost:1580 进行配置，后续使用及配置也请在此页面进行\nPowered by Tianli 2023 For SZCU\033[0m")
+	// 如果没有config.dat文件不在本地，则自动打开浏览器
+	_, err = os.Stat(configFile)
+	if os.IsNotExist(err) {
+		cmd := exec.Command("cmd", "/c", "start", "http://localhost:1580")
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		err = cmd.Run()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+	}
+	err = http.ListenAndServe(":1580", nil)
+	if err != nil {
+		// 打开浏览器
+		cmd := exec.Command("cmd", "/c", "start", "http://localhost:1580")
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		err = cmd.Run()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+	}
+	saveConfig()
+}
+
+// 列出网卡列表，以json格式返回
+func listInterfacesHandler(w http.ResponseWriter, _ *http.Request) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var buf bytes.Buffer
+	buf.WriteString("[")
+	for i, iface := range ifaces {
+		buf.WriteString(fmt.Sprintf("\"%s\"", iface.Name))
+		if i != len(ifaces)-1 {
+			buf.WriteString(",")
+		}
+	}
+	buf.WriteString("]")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(buf.Bytes())
+}
+
+// 遍历网卡列表，返回IP为20开头的网卡名称
+func getIface() string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		fmt.Println(err)
+		return ""
+	}
+
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			fmt.Println(err)
+			return ""
+		}
+
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if ok && !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
+				if ipNet.IP.String()[0:2] == "20" {
+					return iface.Name
+				}
+			}
+		}
+	}
+
+	return ""
 }
 
 func getIPAndMAC(iface string) (string, string) {
@@ -144,6 +260,10 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	intervalStr := loginData.Interval
 	autoLogin = loginData.AutoLogin
 	iface = loginData.Iface
+
+	if iface == "" {
+		iface = getIface()
+	}
 
 	fmt.Fprint(w, "登录信息已配置")
 
@@ -303,92 +423,4 @@ func listInterfaces() {
 	for _, iface := range ifaces {
 		fmt.Println(iface.Name)
 	}
-}
-
-func main() {
-	loadConfig()
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	configFile = homeDir + "\\Documents\\autologin\\config.dat"
-	fmt.Println("配置文件路径：", configFile)
-	// 如果没有相关文件夹，则创建
-	_, err = os.Stat(homeDir + "\\Documents\\autologin")
-	if os.IsNotExist(err) {
-		err = os.Mkdir(homeDir+"\\Documents\\autologin", os.ModePerm)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-	}
-
-	client = http.Client{
-		Timeout: 3 * time.Second,
-	}
-
-	listInterfaces()
-	runtime.LockOSThread()
-
-	http.HandleFunc("/", indexHandler)
-	http.HandleFunc("/login", loginHandler)
-	// 列出网卡列表，list函数
-	http.HandleFunc("/list", listInterfacesHandler)
-
-	go func() {
-		for {
-			if autoLogin && !checkLogin() {
-				login()
-			}
-			time.Sleep(interval)
-		}
-	}()
-
-	fmt.Println("\033[31m网卡名称请参考以上列表进行配置测试\n已启动自动登录程序，请在浏览器打开http://localhost:1580 进行配置，后续使用及配置也请在此页面进行\nPowered by Tianli 2023 For SZCU\033[0m")
-	// 如果没有config.dat文件不在本地，则自动打开浏览器
-	_, err = os.Stat(configFile)
-	if os.IsNotExist(err) {
-		cmd := exec.Command("cmd", "/c", "start", "http://localhost:1580")
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		err = cmd.Run()
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-	}
-	err = http.ListenAndServe(":1580", nil)
-	if err != nil {
-		// 打开浏览器
-		cmd := exec.Command("cmd", "/c", "start", "http://localhost:1580")
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		err = cmd.Run()
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-	}
-	saveConfig()
-}
-
-// 列出网卡列表，以json格式返回
-func listInterfacesHandler(w http.ResponseWriter, _ *http.Request) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	var buf bytes.Buffer
-	buf.WriteString("[")
-	for i, iface := range ifaces {
-		buf.WriteString(fmt.Sprintf("\"%s\"", iface.Name))
-		if i != len(ifaces)-1 {
-			buf.WriteString(",")
-		}
-	}
-	buf.WriteString("]")
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(buf.Bytes())
 }
