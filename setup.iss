@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "AutoLogin"
-#define MyAppVersion "3.1"
+#define MyAppVersion "3.2"
 #define MyAppPublisher "Tianli,SZCU SNC"
 #define MyAppURL "https://www.tianli0.top/"
 #define MyAppExeName "autologin.exe"
