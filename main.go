@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"syscall"
 	"time"
@@ -65,13 +66,10 @@ func main() {
 		Timeout: 3 * time.Second,
 	}
 
-	listInterfaces()
 	runtime.LockOSThread()
 
 	http.HandleFunc("/", indexHandler)
 	http.HandleFunc("/login", loginHandler)
-	// 列出网卡列表，list函数
-	http.HandleFunc("/list", listInterfacesHandler)
 
 	go func() {
 		for {
@@ -82,7 +80,7 @@ func main() {
 		}
 	}()
 
-	fmt.Println("\033[31m网卡名称请参考以上列表进行配置测试\n已启动自动登录程序，请在浏览器打开http://localhost:1580 进行配置，后续使用及配置也请在此页面进行\nPowered by Tianli 2023 For SZCU\033[0m")
+	fmt.Println("\033[31m已启动自动登录程序，请在浏览器打开http://localhost:1580 进行配置，\nPowered by Tianli 2023 For SZCU\033[0m")
 	// 如果没有config.dat文件不在本地，则自动打开浏览器
 	_, err = os.Stat(configFile)
 	if os.IsNotExist(err) {
@@ -106,28 +104,6 @@ func main() {
 		}
 	}
 	saveConfig()
-}
-
-// 列出网卡列表，以json格式返回
-func listInterfacesHandler(w http.ResponseWriter, _ *http.Request) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	var buf bytes.Buffer
-	buf.WriteString("[")
-	for i, iface := range ifaces {
-		buf.WriteString(fmt.Sprintf("\"%s\"", iface.Name))
-		if i != len(ifaces)-1 {
-			buf.WriteString(",")
-		}
-	}
-	buf.WriteString("]")
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(buf.Bytes())
 }
 
 // 遍历网卡列表，返回IP为20开头的网卡名称
@@ -158,35 +134,43 @@ func getIface() string {
 	return ""
 }
 
-func getIPAndMAC(iface string) (string, string) {
-	ifaceObj, err := net.InterfaceByName(iface)
+func getIPAndMAC() (string, string) {
+	resp, err := http.Get("http://172.16.8.22/")
+	if err != nil {
+		fmt.Println(err)
+		return "", ""
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println(err)
 		return "", ""
 	}
 
-	addrs, err := ifaceObj.Addrs()
-	if err != nil {
-		fmt.Println(err)
-		return "", ""
-	}
-
+	// 使用正则表达式提取IP地址
+	var ipMatches []string
 	var ip string
-	for _, addr := range addrs {
-		ipNet, ok := addr.(*net.IPNet)
-		if ok && !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
-			ip = ipNet.IP.String()
-			break
+	ipRegex := regexp.MustCompile(`v46ip='([\d.]+)'`)
+	ipMatches = ipRegex.FindStringSubmatch(string(body))
+	if len(ipMatches) < 2 {
+		ipRegex := regexp.MustCompile(`v4ip='([\d.]+)'`)
+		ipMatches = ipRegex.FindStringSubmatch(string(body))
+		if len(ipMatches) < 2 {
+			fmt.Println("无法获取IP地址")
+			return "", ""
 		}
 	}
+	ip = ipMatches[1]
+	fmt.Println("IP地址：", ip)
 
-	mac := ifaceObj.HardwareAddr.String()
+	mac := "000000000000"
 
 	return ip, mac
 }
 
 func login() {
-	ip, mac := getIPAndMAC(iface)
+	ip, mac := getIPAndMAC()
 	//请注意针对您的校园网修改登录请求
 	macEncoded := url.QueryEscape(mac)
 	loginURL := fmt.Sprintf("http://172.16.8.22:801/eportal/?c=Portal&a=login&callback=dr1004&login_method=1&user_account=%%2C0%%2C%s%%40telecom&user_password=%s&wlan_user_ip=%s&wlan_user_ipv6=&wlan_user_mac=%s&wlan_ac_ip=&wlan_ac_name=&jsVersion=3.3.3&v=9431", username, password, ip, macEncoded)
@@ -245,7 +229,6 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		Username  string `json:"username"`
 		Password  string `json:"password"`
 		Interval  string `json:"interval"`
-		Iface     string `json:"iface"`
 		AutoLogin bool   `json:"autoLogin"`
 	}
 
@@ -259,7 +242,6 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	password = loginData.Password
 	intervalStr := loginData.Interval
 	autoLogin = loginData.AutoLogin
-	iface = loginData.Iface
 
 	if iface == "" {
 		iface = getIface()
@@ -284,7 +266,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func indexHandler(w http.ResponseWriter, _ *http.Request) {
-	ip, mac := getIPAndMAC(iface)
+	ip, mac := getIPAndMAC()
 
 	var status string
 	if checkLogin() {
@@ -297,14 +279,12 @@ func indexHandler(w http.ResponseWriter, _ *http.Request) {
 		Status    string
 		Interval  string
 		AutoLogin bool
-		Iface     string
 		IP        string
 		MAC       string
 	}{
 		status,
 		interval.String(),
 		autoLogin,
-		iface,
 		ip,
 		mac,
 	}
@@ -330,7 +310,6 @@ func saveConfig() {
 	config.Password = password
 	config.Interval = interval
 	config.AutoLogin = autoLogin
-	config.Iface = iface
 
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
@@ -394,7 +373,6 @@ func loadConfig() {
 		password = "default_password"
 		interval = 10 * time.Second
 		autoLogin = false
-		iface = "Ethernet"
 		return
 	}
 
@@ -410,17 +388,4 @@ func loadConfig() {
 	password = config.Password
 	interval = config.Interval
 	autoLogin = config.AutoLogin
-	iface = config.Iface
-}
-
-func listInterfaces() {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	for _, iface := range ifaces {
-		fmt.Println(iface.Name)
-	}
 }

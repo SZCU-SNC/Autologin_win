@@ -94,7 +94,6 @@
     <form method="post" action="/login" onsubmit="return false;">
         <p>当前状态：{{.Status}}</p>
         <p>当前IP地址：{{.IP}}</p>
-        <p>当前MAC地址：{{.MAC}}</p>
         <p>
             <label for="username">用户名：</label>
             <input type="text" name="username" id="username">
@@ -106,10 +105,6 @@
         <p>
             <label for="interval">检查间隔（秒）：</label>
             <input type="number" name="interval" id="interval">
-        </p>
-        <p>
-            <label for="iface">网卡名称：</label>
-            <select name="iface" id="iface"></select>
         </p>
         <p>
             <label for="auto_login">自动登录：</label>
@@ -125,7 +120,6 @@
         const usernameInput = document.getElementById('username');
         const passwordInput = document.getElementById('password');
         const intervalInput = document.getElementById('interval');
-        const ifaceSelect = document.getElementById('iface');
         const autoLoginCheckbox = document.getElementById('auto_login');
 
         // 获取上次保存的配置项
@@ -137,33 +131,11 @@
         intervalInput.value = savedConfig.interval || '';
         autoLoginCheckbox.checked = savedConfig.autoLogin || false;
 
-        // 发送异步请求获取网卡名称列表
-        fetch('/list')
-            .then(response => response.json())
-            .then(data => {
-                // 清空原有的选项
-                ifaceSelect.innerHTML = '';
-
-                // 根据返回的JSON数据创建选项
-                data.forEach(name => {
-                    const option = document.createElement('option');
-                    option.value = name;
-                    option.textContent = name;
-                    ifaceSelect.appendChild(option);
-                });
-
-                // 设置网卡名称的值
-                ifaceSelect.value = savedConfig.iface || '';
-            })
-            .catch(error => {
-                console.error('请求网卡名称列表时发生错误:', error);
-            });
 
         // 监听输入框和勾选框的变化，保存配置项到localStorage中
         usernameInput.addEventListener('input', saveConfig);
         passwordInput.addEventListener('input', saveConfig);
         intervalInput.addEventListener('input', saveConfig);
-        ifaceSelect.addEventListener('change', saveConfig);
         autoLoginCheckbox.addEventListener('change', saveConfig);
 
         function saveConfig() {
@@ -171,11 +143,10 @@
             const username = usernameInput.value;
             const password = passwordInput.value;
             const interval = intervalInput.value;
-            const iface = ifaceSelect.value;
             const autoLogin = autoLoginCheckbox.checked;
 
             // 将输入框和勾选框的值存储到localStorage中
-            localStorage.setItem('config', JSON.stringify({ username, password, interval, iface, autoLogin }));
+            localStorage.setItem('config', JSON.stringify({ username, password, interval, autoLogin }));
         }
 
         function sendRequest() {
@@ -183,7 +154,6 @@
             const username = usernameInput.value;
             const password = passwordInput.value;
             const interval = intervalInput.value;
-            const iface = ifaceSelect.value;
             const autoLogin = autoLoginCheckbox.checked;
 
             // 构造请求体数据
@@ -191,7 +161,6 @@
                 username: username,
                 password: password,
                 interval: interval,
-                iface: iface,
                 autoLogin: autoLogin
             };
 
@@ -215,6 +184,6 @@
         }
     </script>
     <footer>Powered By <a href="https://www.tianli0.top/">Tianli</a></footer>
-    <footer>Version 3.0 2023/10/2</footer>
+    <footer>Version 4.0 2023/11/23</footer>
 </body>
 </html>
